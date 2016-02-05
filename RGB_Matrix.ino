@@ -3,7 +3,8 @@
 #include <Adafruit_NeoPixel.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
-#include <Functions.cpp>
+#include <RGB_Matrix.h>
+#include <RGB_Matrix.cpp>
 
 Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(10085);
 /*
@@ -98,3 +99,5 @@ void loop()
     bitTime(tm.s + 1, SECOND, SECOND_ROW);
   }
 }
+
+main();
