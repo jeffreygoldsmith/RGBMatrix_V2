@@ -14,6 +14,35 @@ struct tm
   int s;    // Second
 } tm;
 
+bool bitBoolean;
+bool setBoolean;
+static const byte ROW_NUM = 7;
+static const byte LED_NUM = 64;
+static const byte DIN_PIN = 13;
+static const byte ROW_OFFSET = 8;
+
+int timeArray[] = {tm.y, tm.mon, tm.wd, tm.d, tm.h, tm.m, tm.s};
+byte timeRow[] = {7, 6, 5, 4, 3, 2, 1};
+byte bitLength[] = {7, 4, 5, 3, 4, 6, 6};
+unsigned long timeChange[] = {31557600, 2592000, 604800, 86400, 3600, 60, 1};
+
+Adafruit_NeoPixel matrix = Adafruit_NeoPixel(LED_NUM, DIN_PIN, NEO_GRB);
+
+void bitTime(int t, byte tLength, byte row)
+{
+  for (int i = 0; i < tLength; i++)
+  {
+    bitBoolean = bitRead(t, i); // Check each bit in t to be high or low
+
+    if (bitBoolean == 1)  // If bit is high set LED to be high, else set low
+      matrix.setPixelColor(i + (ROW_OFFSET * row), 255, 0, 0);
+    else
+      matrix.setPixelColor(i + (ROW_OFFSET * row), 0, 0, 0);
+
+    matrix.show();
+  }
+}
+
 struct tm Decode(time_t ts)
 {
   int d, m, y;
@@ -54,19 +83,75 @@ Time::Time ()
   _pSecond = 0;
 }
 
+bool
+
 void Time::ChangeTime (byte setButton, byte rowButton, byte upButton, byte downButton)
 {
-  _rowNumber = 0;
-   
-  void flash()
-  {
-    
-  }
-    
-  if (digitalRead(setButton)
+  _rowNumber = 0;   // Set row to 0
+
+  //
+  // Check if setButton is pressed, if true debounce and go into set mode.
+  //
+
+  if (digitalRead(setButton))
   {
     delay(10);
-    if (digitalRead(setButton)
+    if (digitalRead(setButton))
+    {
+      delay(1000);
+      setBoolean = 1;
+    }
+
+    if (setBoolean)
+    {
+      for (byte i = 0; i < ROW_NUM; i++)    // Flash row that is being set on/off
+      {
+        matrix.setPixelColor(i + (ROW_NUM * _rowNumber), 0, 0, 0);
+        delay(1000);
+        bitTime(timeArray[_rowNumber], bitLength[_rowNumber], timeRow[_rowNumber]);
+        delay(1000);
+      }
+
+      //
+      // Check if rowChange button is pressed, if true debounce and add one to _rowNumber.
+      //
+
+      if (digitalRead(rowButton))
+      {
+        delay(10);
+        if (digitalRead(rowButton))
+          _rowNumber++;
+      }
+
+      //
+      // Check if up button is pressed, if true debounce and add time.
+      //
+
+      if (digitalRead(upButton))
+      {
+        delay(10);
+        if (digitalRead(upButton))
+          adjustTime(timeChange[_rowNumber]);
+      }
+
+      //
+      // Check if down button is pressed, if true debounce and subtract time.
+      //
+
+      if (digitalRead(downButton))
+      {
+        delay(10);
+        if (digitalRead(downButton))
+          adjustTime(0 - timeChange[_rowNumber]);
+      }
+
+      if (digitalRead(setButton))
+      {
+        delay(10);
+        if (digitalRead(setButton))
+          setBoolean = 0;
+      }
+    }
   }
 }
 
