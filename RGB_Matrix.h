@@ -1,9 +1,15 @@
 #include "Arduino.h"
+#ifndef RGB_MATRIX_H
+#define RGB_MATRIX_H
 
-class Matrix
+class Display
 {
   public:
-  Matrix(byte dataIn, byte ledNum, byte Brightness);
+  Display(byte dataIn, byte Brightness);
+  void DisplayTime();
+
+  private:
+  byte pSecond;
 };
 
 class Time
@@ -13,11 +19,14 @@ class Time
   void ChangeTime(byte setButton, byte rowButton, byte upButton, byte downButton);
 
   private:
-  byte _rowNumber;
-  unsigned int _pSecond;
+  byte rowNumber;
 };
 
-int main()
+class Barometer
 {
-  
-}
+  public:
+  Barometer();
+  void BarometerRead();
+};
+
+#endif

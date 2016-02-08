@@ -1,7 +1,8 @@
 #include "Arduino.h"
-#include <Time.h>
 #include "RGB_Matrix.h"
+#include <Time.h>
 #include <Adafruit_NeoPixel.h>
+#include <Adafruit_BMP085_U.h>
 
 struct tm
 {
@@ -14,27 +15,50 @@ struct tm
   int s;    // Second
 } tm;
 
-bool bitBoolean;
-bool setBoolean;
 static const byte ROW_NUM = 7;
+static const byte ROW_OFFSET = 8;
 static const byte LED_NUM = 64;
 static const byte DIN_PIN = 13;
-static const byte ROW_OFFSET = 8;
+static const byte CENTURY = 2000;          // Century
+static const byte NUM_ELEMENTS = 24;       // Number of barometer samples
+
+static const byte row[] = {7, 6, 5, 4, 3, 2, 1};   // Row number of time measurements
+static const byte bitLength[] = {7, 4, 5, 3, 4, 6, 6};   // Bit length of time measurements
 
 int timeArray[] = {tm.y, tm.mon, tm.wd, tm.d, tm.h, tm.m, tm.s};
-byte timeRow[] = {7, 6, 5, 4, 3, 2, 1};
-byte bitLength[] = {7, 4, 5, 3, 4, 6, 6};
-unsigned long timeChange[] = {31557600, 2592000, 604800, 86400, 3600, 60, 1};
+unsigned int timeChange[] = {31557600, 2592000, 604800, 86400, 3600, 60, 1};
+int sample[NUM_ELEMENTS];   // Array to hold barometer samples for past 24 hours
 
-Adafruit_NeoPixel matrix = Adafruit_NeoPixel(LED_NUM, DIN_PIN, NEO_GRB);
+bool bitBool;
+bool setBoolean;
+bool setPrev;
+bool rowPrev;
+bool upPrev;
+bool downPrev;
+byte pSecond = 0;
+
+Adafruit_NeoPixel matrix = Adafruit_NeoPixel(DIN_PIN, LED_NUM, NEO_GRB);
+Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(10085);
+
+bool debounce (bool input, bool pInput)
+{
+  if (input != pInput)
+  {
+    if (input)
+    {
+      return true;
+    }
+  }
+  delay(50);
+}
 
 void bitTime(int t, byte tLength, byte row)
 {
   for (int i = 0; i < tLength; i++)
   {
-    bitBoolean = bitRead(t, i); // Check each bit in t to be high or low
+    bitBool = bitRead(t, i); // Check each bit in t to be high or low
 
-    if (bitBoolean == 1)  // If bit is high set LED to be high, else set low
+    if (bitBool)  // If bit is high set LED to be high, else set low
       matrix.setPixelColor(i + (ROW_OFFSET * row), 255, 0, 0);
     else
       matrix.setPixelColor(i + (ROW_OFFSET * row), 0, 0, 0);
@@ -69,89 +93,122 @@ struct tm Decode(time_t ts)
   return tm;
 }
 
-Matrix::Matrix (byte dataIn, byte ledNum, byte brightness)
+
+
+
+
+Display::Display (byte dataIn, byte brightness)
 {
   pinMode(dataIn, OUTPUT);
-  Adafruit_NeoPixel matrix = Adafruit_NeoPixel(ledNum, dataIn, NEO_GRB);
   matrix.begin();
   matrix.setBrightness(brightness);
   matrix.show();
 }
 
-Time::Time ()
+void Display::DisplayTime ()
 {
-  _pSecond = 0;
+  if (second() - pSecond == 1)    // Check if 1 second has passed
+  {
+    Decode(now());
+
+    bitTime(tm.y % CENTURY, bitLength[6], row[6]);
+    bitTime(tm.mon, bitLength[5], row[5]);
+    bitTime(tm.d, bitLength[4], row[4]);
+    bitTime(tm.wd, bitLength[3], row[3]);
+    bitTime(tm.h, bitLength[2], row[2]);
+    bitTime(tm.m, bitLength[1], row[1]);
+    bitTime(tm.s + 1, bitLength[0], row[0]);
+  }
 }
 
-bool
+
+
+
+
+Time::Time ()
+{
+  setTime(0, 0, 0, 2, 11, 1999);    // Initally set time to be 2 November 1999
+}
 
 void Time::ChangeTime (byte setButton, byte rowButton, byte upButton, byte downButton)
 {
-  _rowNumber = 0;   // Set row to 0
+  rowNumber = 0;   // Set row to 0
 
   //
-  // Check if setButton is pressed, if true debounce and go into set mode.
+  // Check if setButton is pressed, go into set mode.
   //
 
-  if (digitalRead(setButton))
+  if (debounce(digitalRead(setButton), setPrev))
   {
-    delay(10);
-    if (digitalRead(setButton))
+    setBoolean = 1;
+    setPrev = digitalRead(setButton);
+  }
+
+  if (setBoolean)
+  {
+    for (byte i = 0; i < ROW_NUM; i++)    // Flash row that is being set on/off
     {
+      matrix.setPixelColor(i + (ROW_NUM * rowNumber), 0, 0, 0);
       delay(1000);
-      setBoolean = 1;
+      bitTime(timeArray[rowNumber], bitLength[rowNumber], row[rowNumber]);
+      delay(1000);
     }
 
-    if (setBoolean)
+    //
+    // If rowButton is pressed, advance 1 row.
+    //
+
+    if (debounce(digitalRead(rowButton), rowPrev))
     {
-      for (byte i = 0; i < ROW_NUM; i++)    // Flash row that is being set on/off
-      {
-        matrix.setPixelColor(i + (ROW_NUM * _rowNumber), 0, 0, 0);
-        delay(1000);
-        bitTime(timeArray[_rowNumber], bitLength[_rowNumber], timeRow[_rowNumber]);
-        delay(1000);
-      }
+      rowNumber++;
+      rowPrev = digitalRead(rowButton);
+    }
 
-      //
-      // Check if rowChange button is pressed, if true debounce and add one to _rowNumber.
-      //
+    //
+    // Check if up button is pressed, add time.
+    //
 
-      if (digitalRead(rowButton))
-      {
-        delay(10);
-        if (digitalRead(rowButton))
-          _rowNumber++;
-      }
+    if (debounce(digitalRead(upButton), upPrev))
+    {
+      adjustTime(timeChange[rowNumber]);
+      upPrev = digitalRead(upButton);
+    }
 
-      //
-      // Check if up button is pressed, if true debounce and add time.
-      //
+    //
+    // Check if down button is pressed, subtract time.
+    //
 
-      if (digitalRead(upButton))
-      {
-        delay(10);
-        if (digitalRead(upButton))
-          adjustTime(timeChange[_rowNumber]);
-      }
+    if (debounce(digitalRead(downButton), downPrev))
+    {
+      adjustTime(0 - timeChange[rowNumber]);
+      downPrev = digitalRead(downButton);
+    }
 
-      //
-      // Check if down button is pressed, if true debounce and subtract time.
-      //
-
-      if (digitalRead(downButton))
-      {
-        delay(10);
-        if (digitalRead(downButton))
-          adjustTime(0 - timeChange[_rowNumber]);
-      }
-
-      if (digitalRead(setButton))
-      {
-        delay(10);
-        if (digitalRead(setButton))
-          setBoolean = 0;
-      }
+    if (debounce(digitalRead(setButton), setPrev))
+    {
+      setBoolean = 0;
+      setPrev = digitalRead(setButton);
     }
   }
 }
+
+
+
+
+Barometer::Barometer ()
+{
+  bmp.begin();
+  sensor_t sensor;
+  bmp.getSensor(&sensor);
+  sensors_event_t barometer;    // Create new sensor event
+  bmp.getEvent(&barometer);
+}
+
+void Barometer::BarometerRead ()
+{
+  
+}
+
+
+
 
