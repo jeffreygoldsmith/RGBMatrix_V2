@@ -3,6 +3,7 @@
 #include <Time.h>
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_BMP085_U.h>
+#include <Adafruit_Sensor.h>
 
 struct tm
 {
@@ -18,50 +19,66 @@ struct tm
 static const byte ROW_NUM = 7;
 static const byte ROW_OFFSET = 8;
 static const byte LED_NUM = 64;
-static const byte DIN_PIN = 13;
+static const byte DIN_PIN = 6;
 static const byte CENTURY = 2000;          // Century
-static const byte NUM_ELEMENTS = 24;       // Number of barometer samples
+static const byte NUM_ELEMENTS = 23;       // Number of barometer samples
 
-static const byte row[] = {7, 6, 5, 4, 3, 2, 1};   // Row number of time measurements
-static const byte bitLength[] = {7, 4, 5, 3, 4, 6, 6};   // Bit length of time measurements
+static const byte row[] = {8, 7, 6, 5, 4, 3, 2};   // Row number of time measurements
+static const byte bitLength[] = {7, 4, 5, 3, 4, 6, 8};   // Bit length of time measurements
 
 int timeArray[] = {tm.y, tm.mon, tm.wd, tm.d, tm.h, tm.m, tm.s};
-unsigned int timeChange[] = {31557600, 2592000, 604800, 86400, 3600, 60, 1};
+int timeChange[] = {31557600, 2592000, 604800, 86400, 3600, 60, 1};
+
+bool buttonState [] = {0, 0, 0, 0, 0, 0};
+bool changeRow [] = {0, 0, 0, 0, 0, 0, 0};
+bool setBool = 0;
+bool setCheck;
+bool setCheckPrev;
+bool rowCheck;
+bool rowCheckPrev;
+bool upCheck;
+bool upCheckPrev;
+bool downCheck;
+bool downCheckPrev;
+
 int sample[NUM_ELEMENTS];   // Array to hold barometer samples for past 24 hours
 
 bool bitBool;
-bool setBoolean;
-bool setPrev;
-bool rowPrev;
-bool upPrev;
-bool downPrev;
 byte pSecond = 0;
+byte pHour = 0;
 
-Adafruit_NeoPixel matrix = Adafruit_NeoPixel(DIN_PIN, LED_NUM, NEO_GRB);
+Adafruit_NeoPixel matrix = Adafruit_NeoPixel(LED_NUM, DIN_PIN, NEO_GRB);
 Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(10085);
 
-bool debounce (bool input, bool pInput)
+bool debounce (byte input, bool i)
 {
-  if (input != pInput)
+  bool button = digitalRead(input);
+
+  if (button != buttonState[i])
   {
-    if (input)
-    {
-      return true;
-    }
+    delay(5);
+    button = digitalRead(input);
   }
-  delay(50);
+  buttonState[i] = button;
 }
 
-void bitTime(int t, byte tLength, byte row)
+void bitTime(int t, byte tLength, byte row, bool set)
 {
+  byte red = 10;
+  byte green = 0;
+  if (set)
+  {
+    red = 0;
+    green = 10;
+  }
   for (int i = 0; i < tLength; i++)
   {
     bitBool = bitRead(t, i); // Check each bit in t to be high or low
 
     if (bitBool)  // If bit is high set LED to be high, else set low
-      matrix.setPixelColor(i + (ROW_OFFSET * row), 255, 0, 0);
+      matrix.setPixelColor(((ROW_OFFSET * row) - 1) - i, red, green, 0);
     else
-      matrix.setPixelColor(i + (ROW_OFFSET * row), 0, 0, 0);
+      matrix.setPixelColor(((ROW_OFFSET * row) - 1) - i, 0, 0, 0);
 
     matrix.show();
   }
@@ -94,104 +111,103 @@ struct tm Decode(time_t ts)
 }
 
 
-
-
-
 Display::Display (byte dataIn, byte brightness)
 {
   pinMode(dataIn, OUTPUT);
   matrix.begin();
-  matrix.setBrightness(brightness);
+  matrix.setBrightness(1);
   matrix.show();
 }
 
 void Display::DisplayTime ()
 {
-  if (second() - pSecond == 1)    // Check if 1 second has passed
-  {
+  if (setBool == LOW)
     Decode(now());
 
-    bitTime(tm.y % CENTURY, bitLength[6], row[6]);
-    bitTime(tm.mon, bitLength[5], row[5]);
-    bitTime(tm.d, bitLength[4], row[4]);
-    bitTime(tm.wd, bitLength[3], row[3]);
-    bitTime(tm.h, bitLength[2], row[2]);
-    bitTime(tm.m, bitLength[1], row[1]);
-    bitTime(tm.s + 1, bitLength[0], row[0]);
-  }
+  bitTime(tm.y % 100, bitLength[6], row[6], changeRow[6]);
+  bitTime(tm.mon, bitLength[5], row[5], changeRow[5]);
+  bitTime(tm.d, bitLength[4], row[4], changeRow[4]);
+  bitTime(tm.wd, bitLength[3], row[3], changeRow[3]);
+  bitTime(tm.h, bitLength[2], row[2], changeRow[2]);
+  bitTime(tm.m, bitLength[1], row[1], changeRow[1]);
+  bitTime(tm.s + 1, bitLength[0], row[0], changeRow[0]);
 }
-
-
-
 
 
 Time::Time ()
 {
   setTime(0, 0, 0, 2, 11, 1999);    // Initally set time to be 2 November 1999
+
+  for (int i = 13; i > 7; i--)
+    pinMode(i, INPUT);
+
+  rowNumber = 6;   // Start at seconds row
 }
 
 void Time::ChangeTime (byte setButton, byte rowButton, byte upButton, byte downButton)
 {
-  rowNumber = 0;   // Set row to 0
-
   //
-  // Check if setButton is pressed, go into set mode.
+  // Check if setButton is pressed, if true go into set mode.
   //
-
-  if (debounce(digitalRead(setButton), setPrev))
+  Serial.println(setBool);
+  if (setBool == 0)
   {
-    setBoolean = 1;
-    setPrev = digitalRead(setButton);
-  }
+    setCheck = debounce(13, 0);
 
-  if (setBoolean)
-  {
-    for (byte i = 0; i < ROW_NUM; i++)    // Flash row that is being set on/off
+    if (setCheckPrev == LOW && setCheck == HIGH)
     {
-      matrix.setPixelColor(i + (ROW_NUM * rowNumber), 0, 0, 0);
-      delay(1000);
-      bitTime(timeArray[rowNumber], bitLength[rowNumber], row[rowNumber]);
-      delay(1000);
+      setBool = 1;
+      //Serial.println(setBool);
     }
 
-    //
-    // If rowButton is pressed, advance 1 row.
-    //
+    setCheckPrev = setCheck;
 
-    if (debounce(digitalRead(rowButton), rowPrev))
+    if (setBool)
     {
-      rowNumber++;
-      rowPrev = digitalRead(rowButton);
-    }
+      for (byte i = 0; i < 7; i++)
+      {
+        if (i == rowNumber)
+          changeRow[rowNumber] = 1;
+        else
+          changeRow[i] = 0;
+      }
 
-    //
-    // Check if up button is pressed, add time.
-    //
+      rowCheck = debounce(rowButton, 1);     // If rowButton is pressed, advance 1 row
 
-    if (debounce(digitalRead(upButton), upPrev))
-    {
-      adjustTime(timeChange[rowNumber]);
-      upPrev = digitalRead(upButton);
-    }
+      if (rowCheckPrev == LOW && rowCheck == HIGH)
+        rowNumber++;
 
-    //
-    // Check if down button is pressed, subtract time.
-    //
+      rowCheckPrev = rowCheck;
 
-    if (debounce(digitalRead(downButton), downPrev))
-    {
-      adjustTime(0 - timeChange[rowNumber]);
-      downPrev = digitalRead(downButton);
-    }
 
-    if (debounce(digitalRead(setButton), setPrev))
-    {
-      setBoolean = 0;
-      setPrev = digitalRead(setButton);
+      upCheck = debounce(upButton, 2);      // Check if up button is pressed, add time
+
+      if (upCheckPrev == LOW && upCheck == HIGH)
+        adjustTime(timeChange[rowNumber]);
+
+      upCheckPrev = upCheck;
+
+
+      downCheck = debounce(downButton, 3);      // Check if down button is pressed, subtract time
+
+      if (downCheckPrev == LOW && downCheck == HIGH)
+        adjustTime(0 - timeChange[rowNumber]);
+
+      downCheckPrev = downCheck;
+
+      if (setBool)
+      { // If setButton is pressed again, exit set mode
+        setCheck = debounce(13, 0);
+
+        if (setCheckPrev == LOW && setCheck == HIGH)
+          setBool = 0;
+          //Serial.println(setBool);
+
+        setCheckPrev = setCheck;
+      }
     }
   }
 }
-
 
 
 
@@ -200,15 +216,20 @@ Barometer::Barometer ()
   bmp.begin();
   sensor_t sensor;
   bmp.getSensor(&sensor);
-  sensors_event_t barometer;    // Create new sensor event
-  bmp.getEvent(&barometer);
 }
 
 void Barometer::BarometerRead ()
 {
-  
+  sensors_event_t barometer;    // Create new sensor event
+  bmp.getEvent(&barometer);
+
+  if (tm.h - pHour == 1)
+  {
+    for (byte i = 1; i < NUM_ELEMENTS; i++)
+    {
+      sample[i] = sample[i - 1];
+    }
+    sample[0] = barometer.pressure;
+
+  }
 }
-
-
-
-
