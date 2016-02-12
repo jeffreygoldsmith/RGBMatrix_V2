@@ -121,7 +121,7 @@ Display::Display (byte dataIn, byte brightness)
 
 void Display::DisplayTime ()
 {
-  if (setBool == LOW)
+  if (setBool == HIGH)
     Decode(now());
 
   bitTime(tm.y % 100, bitLength[6], row[6], changeRow[6]);
@@ -145,19 +145,19 @@ Time::Time ()
 }
 
 void Time::ChangeTime (byte setButton, byte rowButton, byte upButton, byte downButton)
-{
+{  
   //
   // Check if setButton is pressed, if true go into set mode.
   //
-  Serial.println(setBool);
+
   if (setBool == 0)
   {
-    setCheck = debounce(13, 0);
+    setCheck = debounce(setButton, 0);
 
     if (setCheckPrev == LOW && setCheck == HIGH)
     {
+      Serial.println(setBool);
       setBool = 1;
-      //Serial.println(setBool);
     }
 
     setCheckPrev = setCheck;
@@ -194,17 +194,19 @@ void Time::ChangeTime (byte setButton, byte rowButton, byte upButton, byte downB
         adjustTime(0 - timeChange[rowNumber]);
 
       downCheckPrev = downCheck;
+    }
 
-      if (setBool)
-      { // If setButton is pressed again, exit set mode
-        setCheck = debounce(13, 0);
+    if (setBool)    // If setButton is pressed again, exit set mode
+    {
+      setCheck = debounce(setButton, 0);
 
-        if (setCheckPrev == LOW && setCheck == HIGH)
-          setBool = 0;
-          //Serial.println(setBool);
-
-        setCheckPrev = setCheck;
+      if (setCheckPrev == LOW && setCheck == HIGH)
+      {
+        Serial.println(setBool);
+        setBool = 0;
       }
+
+      setCheckPrev = setCheck;
     }
   }
 }
