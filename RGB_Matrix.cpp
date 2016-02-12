@@ -145,7 +145,7 @@ Time::Time ()
 }
 
 void Time::ChangeTime (byte setButton, byte rowButton, byte upButton, byte downButton)
-{  
+{
   //
   // Check if setButton is pressed, if true go into set mode.
   //
@@ -195,19 +195,18 @@ void Time::ChangeTime (byte setButton, byte rowButton, byte upButton, byte downB
 
       downCheckPrev = downCheck;
     }
+  }
+  if (setBool)
+  {
+    setCheck = debounce(setButton, 0);
 
-    if (setBool)    // If setButton is pressed again, exit set mode
+    if (setCheckPrev == LOW && setCheck == HIGH)
     {
-      setCheck = debounce(setButton, 0);
-
-      if (setCheckPrev == LOW && setCheck == HIGH)
-      {
-        Serial.println(setBool);
-        setBool = 0;
-      }
-
-      setCheckPrev = setCheck;
+      Serial.println(setBool);
+      setBool = 0;
     }
+
+    setCheckPrev = setCheck;
   }
 }
 
