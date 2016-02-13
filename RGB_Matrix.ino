@@ -1,6 +1,3 @@
-#include <Time.h>
-#include "RGB_Matrix.h"
-
 /*
    Name   : Jeffrey Goldsmith
    Teacher: Mr. D'Arcy
@@ -9,6 +6,9 @@
 
    Description: LED RGB 1 line serial in binary clock matrix
 */
+
+
+#include "RGB_Matrix.h"
 
 static const byte DATA_IN_PIN = 6;         // Data in pin for RGB Matrix
 static const byte LED_BRIGHTNESS = 30;     // Brightness of LEDs
@@ -23,12 +23,13 @@ Display rgb(DATA_IN_PIN, LED_BRIGHTNESS);
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(9600); //!
+  rtc.init();
 }
 
 void loop()
 {
-  rgb.DisplayTime();    // Display time for second, minute, hour, etc.
+  rgb.DisplayTime(); // Display time for second, minute, hour, etc.
   rtc.ChangeTime(SET_BUTTON, ROW_BUTTON, UP_BUTTON, DOWN_BUTTON);
 }
 
