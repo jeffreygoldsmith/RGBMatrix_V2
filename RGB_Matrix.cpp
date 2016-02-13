@@ -31,7 +31,7 @@ int timeChange[] = {31557600, 2592000, 604800, 86400, 3600, 60, 1};
 
 bool buttonState [] = {0, 0, 0, 0, 0, 0};
 bool changeRow [] = {0, 0, 0, 0, 0, 0, 0};
-bool setBool = 0;
+bool setBool = 1;
 bool setCheck;
 bool setCheckPrev;
 bool rowCheck;
@@ -66,11 +66,13 @@ void bitTime(int t, byte tLength, byte row, bool set)
 {
   byte red = 10;
   byte green = 0;
+
   if (set)
   {
     red = 0;
     green = 10;
   }
+
   for (int i = 0; i < tLength; i++)
   {
     bitBool = bitRead(t, i); // Check each bit in t to be high or low
@@ -121,7 +123,7 @@ Display::Display (byte dataIn, byte brightness)
 
 void Display::DisplayTime ()
 {
-  if (setBool == HIGH)
+  if (setBool == 0)
     Decode(now());
 
   bitTime(tm.y % 100, bitLength[6], row[6], changeRow[6]);
@@ -156,29 +158,32 @@ void Time::ChangeTime (byte setButton, byte rowButton, byte upButton, byte downB
 
     if (setCheckPrev == LOW && setCheck == HIGH)
     {
-      Serial.println(setBool);
       setBool = 1;
+      Serial.println("setBool = 1");
     }
 
     setCheckPrev = setCheck;
 
-    if (setBool)
+    while (setBool)
     {
-      for (byte i = 0; i < 7; i++)
-      {
-        if (i == rowNumber)
-          changeRow[rowNumber] = 1;
-        else
-          changeRow[i] = 0;
-      }
-
       rowCheck = debounce(rowButton, 1);     // If rowButton is pressed, advance 1 row
 
       if (rowCheckPrev == LOW && rowCheck == HIGH)
+      {
         rowNumber++;
+        rowNumber = rowNumber % 7;
+        Serial.println(rowNumber);
+      }
 
       rowCheckPrev = rowCheck;
 
+      for (byte i = 0; i < 7; i++)
+      {
+        if (i == rowNumber)
+          changeRow[i] = 1;
+        else
+          changeRow[i] = 0;
+      }
 
       upCheck = debounce(upButton, 2);      // Check if up button is pressed, add time
 
@@ -196,14 +201,15 @@ void Time::ChangeTime (byte setButton, byte rowButton, byte upButton, byte downB
       downCheckPrev = downCheck;
     }
   }
+  
   if (setBool)
   {
     setCheck = debounce(setButton, 0);
 
     if (setCheckPrev == LOW && setCheck == HIGH)
     {
-      Serial.println(setBool);
       setBool = 0;
+      Serial.println("setBool = 0:");
     }
 
     setCheckPrev = setCheck;
